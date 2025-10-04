@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 # Configuration constants
-DEFAULT_LARGE_FACE_THRESHOLD = 0.10  # 10% of frame area
-DEFAULT_SMALL_FACE_THRESHOLD = 0.02  # 2% of frame area
+DEFAULT_LARGE_FACE_THRESHOLD = 0.02  # 2% of frame area (lowered for better success rate)
+DEFAULT_SMALL_FACE_THRESHOLD = 0.01  # 1% of frame area
 DEFAULT_BLUR_THRESHOLD = 100  # Laplacian variance
 DEFAULT_START_TIME = 60  # seconds
 DEFAULT_GENDER_PREFERENCE = 'female'  # 'female', 'male', or 'none'

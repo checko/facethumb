@@ -108,63 +108,32 @@ def process_single_video(
                         best_score = score
                         best_timestamp = 0  # Thumbnail
 
-        # Stage 2: Try scene detection timestamps
-        if use_adaptive and best_score < 0.6:  # Only if thumbnail wasn't great
-            logger.debug("Stage 2: Scene detection")
-            scene_timestamps = detect_scenes(video_path, threshold=0.4, max_scenes=5)
+        # Stage 2: Scene detection DISABLED (too slow, often times out)
+        # Skipping to Stage 3 for faster, more reliable sampling
 
-            for ts in scene_timestamps[:3]:  # Check first 3 scenes
-                if ts < 5 or ts > duration - 5:
-                    continue
-
-                try:
-                    frame = extract_iframe(video_path, ts)
-                    face_detections = face_analyzer.detect_faces_batch([frame])[0]
-
-                    if face_detections:
-                        largest_face = find_largest_face(face_detections, frame.shape)
-                        if largest_face['metrics']['face_area_ratio'] >= min_face_threshold:
-                            quality = check_image_quality(frame, largest_face['bbox'])
-                            score = score_face(
-                                largest_face, frame.shape, frame, quality,
-                                gender_preference=gender_preference, gender_weight=gender_weight
-                            )
-
-                            logger.debug(f"Scene @{ts:.1f}s: face={largest_face['metrics']['face_area_ratio']:.2%}, score={score:.3f}")
-
-                            if score > best_score:
-                                best_frame = frame
-                                best_face = largest_face
-                                best_score = score
-                                best_timestamp = ts
-
-                            # If we found a great face, stop early
-                            if score > 0.8:
-                                break
-                except Exception as e:
-                    logger.debug(f"Failed to extract scene at {ts:.1f}s: {e}")
-
-        # Stage 3: Adaptive time-based sampling
+        # Stage 3: Dense adaptive time-based sampling
         if best_score < 0.7:  # Only if we haven't found a great face yet
-            logger.debug("Stage 3: Adaptive sampling")
+            logger.debug("Stage 3: Dense adaptive sampling")
 
-            # Calculate sampling timestamps (spread across video)
+            # Calculate sampling timestamps (more granular for better coverage)
             timestamps = []
 
-            # Always try the start_time
+            # Always try the start_time first
             adjusted_start = min(start_time, max(duration * 0.15, 10))
             timestamps.append(adjusted_start)
 
-            # Add more timestamps if needed
+            # Add dense sampling throughout the video
             if use_adaptive:
-                # Sample at 15%, 30%, 45%, 60% of video duration
-                for pct in [0.15, 0.30, 0.45, 0.60]:
+                # Sample every 5% from 5% to 80% (16 samples total)
+                # This provides much better coverage for long videos
+                for pct in [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40,
+                           0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80]:
                     ts = duration * pct
                     if 10 < ts < duration - 10 and ts not in timestamps:
                         timestamps.append(ts)
 
-                # Limit to 5 total samples
-                timestamps = timestamps[:5]
+                # Limit to 16 total samples for reasonable processing time
+                timestamps = timestamps[:16]
 
             for ts in timestamps:
                 try:
