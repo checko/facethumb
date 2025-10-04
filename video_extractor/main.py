@@ -19,7 +19,9 @@ from video_extractor.utils import (
     DEFAULT_LARGE_FACE_THRESHOLD,
     DEFAULT_START_TIME,
     DEFAULT_GENDER_PREFERENCE,
-    DEFAULT_GENDER_WEIGHT
+    DEFAULT_GENDER_WEIGHT,
+    DEFAULT_SAMPLING_PERCENTAGES,
+    DEFAULT_MAX_SAMPLES
 )
 from video_extractor.video_processor import (
     get_video_metadata,
@@ -124,16 +126,15 @@ def process_single_video(
 
             # Add dense sampling throughout the video
             if use_adaptive:
-                # Sample every 5% from 5% to 80% (16 samples total)
+                # Use configured sampling percentages (default: every 5% from 5% to 80%)
                 # This provides much better coverage for long videos
-                for pct in [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40,
-                           0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80]:
+                for pct in DEFAULT_SAMPLING_PERCENTAGES:
                     ts = duration * pct
                     if 10 < ts < duration - 10 and ts not in timestamps:
                         timestamps.append(ts)
 
-                # Limit to 16 total samples for reasonable processing time
-                timestamps = timestamps[:16]
+                # Limit to configured max samples for reasonable processing time
+                timestamps = timestamps[:DEFAULT_MAX_SAMPLES]
 
             for ts in timestamps:
                 try:

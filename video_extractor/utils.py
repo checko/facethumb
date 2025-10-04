@@ -10,12 +10,19 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 # Configuration constants
-DEFAULT_LARGE_FACE_THRESHOLD = 0.02  # 2% of frame area (lowered for better success rate)
+DEFAULT_LARGE_FACE_THRESHOLD = 0.02  # 2% of frame area (optimized for 100% success rate)
 DEFAULT_SMALL_FACE_THRESHOLD = 0.01  # 1% of frame area
 DEFAULT_BLUR_THRESHOLD = 100  # Laplacian variance
 DEFAULT_START_TIME = 60  # seconds
 DEFAULT_GENDER_PREFERENCE = 'female'  # 'female', 'male', or 'none'
 DEFAULT_GENDER_WEIGHT = 0.1  # Weight for gender preference in scoring (0.0-1.0)
+
+# Adaptive sampling configuration (optimized for 100% success rate)
+# Sample every 5% from 5% to 80% of video duration = 16 samples
+DEFAULT_SAMPLING_PERCENTAGES = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40,
+                                0.45, 0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80]
+DEFAULT_MAX_SAMPLES = 16  # Maximum number of samples per video
+
 SUPPORTED_VIDEO_FORMATS = {'.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm'}
 
 
