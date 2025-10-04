@@ -17,7 +17,9 @@ from video_extractor.utils import (
     is_video_file,
     get_output_filename,
     DEFAULT_LARGE_FACE_THRESHOLD,
-    DEFAULT_START_TIME
+    DEFAULT_START_TIME,
+    DEFAULT_GENDER_PREFERENCE,
+    DEFAULT_GENDER_WEIGHT
 )
 from video_extractor.video_processor import (
     get_video_metadata,
@@ -41,7 +43,9 @@ def process_single_video(
     face_analyzer: FaceAnalyzer,
     start_time: float = DEFAULT_START_TIME,
     min_face_threshold: float = DEFAULT_LARGE_FACE_THRESHOLD,
-    use_adaptive: bool = True
+    use_adaptive: bool = True,
+    gender_preference: str = DEFAULT_GENDER_PREFERENCE,
+    gender_weight: float = DEFAULT_GENDER_WEIGHT
 ) -> bool:
     """
     Process a single video file to extract a face frame using adaptive sampling.
@@ -91,7 +95,10 @@ def process_single_video(
                     largest_face = find_largest_face(face_detections, thumbnail.shape)
                     if largest_face['metrics']['face_area_ratio'] >= min_face_threshold:
                         quality = check_image_quality(thumbnail, largest_face['bbox'])
-                        score = score_face(largest_face, thumbnail.shape, quality)
+                        score = score_face(
+                            largest_face, thumbnail.shape, thumbnail, quality,
+                            gender_preference=gender_preference, gender_weight=gender_weight
+                        )
 
                         logger.debug(f"Thumbnail: face={largest_face['metrics']['face_area_ratio']:.2%}, score={score:.3f}")
 
@@ -117,7 +124,10 @@ def process_single_video(
                         largest_face = find_largest_face(face_detections, frame.shape)
                         if largest_face['metrics']['face_area_ratio'] >= min_face_threshold:
                             quality = check_image_quality(frame, largest_face['bbox'])
-                            score = score_face(largest_face, frame.shape, quality)
+                            score = score_face(
+                                largest_face, frame.shape, frame, quality,
+                                gender_preference=gender_preference, gender_weight=gender_weight
+                            )
 
                             logger.debug(f"Scene @{ts:.1f}s: face={largest_face['metrics']['face_area_ratio']:.2%}, score={score:.3f}")
 
@@ -164,7 +174,10 @@ def process_single_video(
                         largest_face = find_largest_face(face_detections, frame.shape)
                         if largest_face['metrics']['face_area_ratio'] >= min_face_threshold:
                             quality = check_image_quality(frame, largest_face['bbox'])
-                            score = score_face(largest_face, frame.shape, quality)
+                            score = score_face(
+                                largest_face, frame.shape, frame, quality,
+                                gender_preference=gender_preference, gender_weight=gender_weight
+                            )
 
                             logger.debug(f"Sample @{ts:.1f}s: face={largest_face['metrics']['face_area_ratio']:.2%}, score={score:.3f}")
 
@@ -237,6 +250,18 @@ def main():
         '--log-file',
         help='Write logs to file'
     )
+    parser.add_argument(
+        '--gender-preference', '-g',
+        choices=['female', 'male', 'none'],
+        default=DEFAULT_GENDER_PREFERENCE,
+        help=f'Prefer faces of specific gender (default: {DEFAULT_GENDER_PREFERENCE})'
+    )
+    parser.add_argument(
+        '--gender-weight',
+        type=float,
+        default=DEFAULT_GENDER_WEIGHT,
+        help=f'Weight for gender preference in scoring 0.0-1.0 (default: {DEFAULT_GENDER_WEIGHT})'
+    )
 
     args = parser.parse_args()
 
@@ -261,7 +286,10 @@ def main():
                 output_path,
                 face_analyzer,
                 args.start_time,
-                args.threshold
+                args.threshold,
+                use_adaptive=True,
+                gender_preference=args.gender_preference,
+                gender_weight=args.gender_weight
             )
             sys.exit(0 if success else 1)
         else:
@@ -276,7 +304,10 @@ def main():
                     output_path,
                     face_analyzer,
                     args.start_time,
-                    args.threshold
+                    args.threshold,
+                    use_adaptive=True,
+                    gender_preference=args.gender_preference,
+                    gender_weight=args.gender_weight
                 ):
                     success_count += 1
 

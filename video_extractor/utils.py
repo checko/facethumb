@@ -14,6 +14,8 @@ DEFAULT_LARGE_FACE_THRESHOLD = 0.10  # 10% of frame area
 DEFAULT_SMALL_FACE_THRESHOLD = 0.02  # 2% of frame area
 DEFAULT_BLUR_THRESHOLD = 100  # Laplacian variance
 DEFAULT_START_TIME = 60  # seconds
+DEFAULT_GENDER_PREFERENCE = 'female'  # 'female', 'male', or 'none'
+DEFAULT_GENDER_WEIGHT = 0.1  # Weight for gender preference in scoring (0.0-1.0)
 SUPPORTED_VIDEO_FORMATS = {'.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm'}
 
 
