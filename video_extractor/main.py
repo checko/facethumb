@@ -33,6 +33,7 @@ from video_extractor.face_analyzer import (
     check_image_quality,
     score_face
 )
+from video_extractor.database import VideoDatabase
 
 logger = logging.getLogger("video_extractor")
 
@@ -46,7 +47,7 @@ def process_single_video(
     use_adaptive: bool = True,
     gender_preference: str = DEFAULT_GENDER_PREFERENCE,
     gender_weight: float = DEFAULT_GENDER_WEIGHT
-) -> bool:
+) -> tuple[bool, dict]:
     """
     Process a single video file to extract a face frame using adaptive sampling.
 
@@ -76,7 +77,7 @@ def process_single_video(
 
         if duration < 5:
             logger.warning(f"Video too short ({duration:.2f}s), skipping")
-            return False
+            return False, {'error': 'Video too short'}
 
         import cv2
 
@@ -196,7 +197,7 @@ def process_single_video(
         # Check if we found a qualifying face
         if best_frame is None or best_face is None:
             logger.info(f"No qualifying faces found in {video_path.name}")
-            return False
+            return False, {'error': 'No qualifying faces found'}
 
         # Save best frame
         output_path = get_output_filename(video_path, output_dir)
@@ -207,11 +208,18 @@ def process_single_video(
             f"✓ Extracted frame from {video_path.name} "
             f"(face: {face_area_ratio:.2%}, score: {best_score:.3f}, time: {best_timestamp:.1f}s) -> {output_path.name}"
         )
-        return True
+
+        # Return metadata for database tracking
+        return True, {
+            'output_path': output_path,
+            'face_area_ratio': face_area_ratio,
+            'score': best_score,
+            'timestamp_seconds': best_timestamp
+        }
 
     except Exception as e:
         logger.error(f"Failed to process {video_path.name}: {e}")
-        return False
+        return False, {'error': str(e)}
 
 
 def main():
@@ -262,6 +270,16 @@ def main():
         default=DEFAULT_GENDER_WEIGHT,
         help=f'Weight for gender preference in scoring 0.0-1.0 (default: {DEFAULT_GENDER_WEIGHT})'
     )
+    parser.add_argument(
+        '--resume',
+        action='store_true',
+        help='Resume previous processing session (skip already processed videos)'
+    )
+    parser.add_argument(
+        '--db-path',
+        default='video_extraction.db',
+        help='Path to database file for progress tracking (default: video_extraction.db)'
+    )
 
     args = parser.parse_args()
 
@@ -275,13 +293,21 @@ def main():
         logger.info(f"Input: {input_path}")
         logger.info(f"Output: {output_path}")
 
+        # Initialize database if resume enabled or processing directory
+        db = None
+        if args.resume or input_path.is_dir():
+            db = VideoDatabase(args.db_path)
+            if args.resume:
+                db.reset_processing_videos()  # Clean up interrupted runs
+                logger.info("Resume mode enabled")
+
         # Initialize face analyzer
         face_analyzer = FaceAnalyzer()
 
         # Process video(s)
         if input_path.is_file():
             # Single video
-            success = process_single_video(
+            success, metadata = process_single_video(
                 input_path,
                 output_path,
                 face_analyzer,
@@ -297,9 +323,19 @@ def main():
             video_files = [f for f in input_path.rglob('*') if is_video_file(f)]
             logger.info(f"Found {len(video_files)} video files")
 
+            # Filter already processed if resume mode
+            if args.resume and db:
+                video_files = db.get_unprocessed_videos(video_files)
+                logger.info(f"Processing {len(video_files)} unprocessed videos")
+
             success_count = 0
             for video_file in video_files:
-                if process_single_video(
+                # Mark as processing
+                if db:
+                    db.mark_video_processing(video_file)
+
+                # Process video
+                success, metadata = process_single_video(
                     video_file,
                     output_path,
                     face_analyzer,
@@ -308,10 +344,34 @@ def main():
                     use_adaptive=True,
                     gender_preference=args.gender_preference,
                     gender_weight=args.gender_weight
-                ):
+                )
+
+                # Update database
+                if db:
+                    db.mark_video_processed(
+                        video_file,
+                        success,
+                        output_path=metadata.get('output_path'),
+                        face_area_ratio=metadata.get('face_area_ratio'),
+                        score=metadata.get('score'),
+                        timestamp_seconds=metadata.get('timestamp_seconds'),
+                        error_message=metadata.get('error')
+                    )
+
+                if success:
                     success_count += 1
 
             logger.info(f"Successfully processed {success_count}/{len(video_files)} videos")
+
+            # Show stats
+            if db:
+                stats = db.get_processing_stats()
+                logger.info(
+                    f"Database stats: {stats['success']} success, "
+                    f"{stats['failed']} failed, {stats['total']} total"
+                )
+                db.close()
+
             sys.exit(0)
 
     except Exception as e:
