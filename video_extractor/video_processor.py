@@ -113,8 +113,7 @@ def extract_iframe(video_path: Path, timestamp: float, output_path: Optional[Pat
         result = subprocess.run(
             cmd,
             capture_output=True,
-            check=True,
-            stderr=subprocess.PIPE
+            check=True
         )
 
         # Decode image from bytes

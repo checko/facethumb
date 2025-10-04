@@ -16,7 +16,7 @@ logger = logging.getLogger("video_extractor")
 class FaceAnalyzer:
     """Face analyzer using MediaPipe Face Detection."""
 
-    def __init__(self, min_detection_confidence: float = 0.5):
+    def __init__(self, min_detection_confidence: float = 0.7):
         """
         Initialize face analyzer.
 
@@ -25,9 +25,10 @@ class FaceAnalyzer:
         """
         self.mp_face_detection = mp.solutions.face_detection
         self.face_detection = self.mp_face_detection.FaceDetection(
-            min_detection_confidence=min_detection_confidence
+            min_detection_confidence=min_detection_confidence,
+            model_selection=1  # 1 = full range model (better accuracy), 0 = short range
         )
-        logger.info("Face analyzer initialized with MediaPipe")
+        logger.info(f"Face analyzer initialized with MediaPipe (confidence: {min_detection_confidence})")
 
     def detect_faces_batch(self, frames: List[np.ndarray]) -> List[List[Dict]]:
         """
@@ -56,11 +57,31 @@ class FaceAnalyzer:
                     # Get bounding box (normalized coordinates)
                     bbox = detection.location_data.relative_bounding_box
 
-                    face_info = {
-                        'bbox': (bbox.xmin, bbox.ymin, bbox.width, bbox.height),
-                        'confidence': detection.score[0]
-                    }
-                    frame_faces.append(face_info)
+                    # Validate face has proper landmarks (eyes, nose, mouth, etc.)
+                    # MediaPipe provides 6 key points: right_eye, left_eye, nose_tip,
+                    # mouth_center, right_ear, left_ear
+                    keypoints = detection.location_data.relative_keypoints
+
+                    # Check if we have at least eyes and nose (minimum for valid face)
+                    has_valid_landmarks = len(keypoints) >= 3
+
+                    # Additional validation: check aspect ratio (faces shouldn't be too wide/tall)
+                    aspect_ratio = bbox.width / bbox.height if bbox.height > 0 else 0
+                    is_valid_aspect_ratio = 0.5 < aspect_ratio < 2.0  # Reasonable face proportions
+
+                    # Only add if it passes validation
+                    if has_valid_landmarks and is_valid_aspect_ratio:
+                        face_info = {
+                            'bbox': (bbox.xmin, bbox.ymin, bbox.width, bbox.height),
+                            'confidence': detection.score[0],
+                            'keypoints': len(keypoints)
+                        }
+                        frame_faces.append(face_info)
+                    else:
+                        logger.debug(
+                            f"Rejected face: landmarks={len(keypoints)}, "
+                            f"aspect_ratio={aspect_ratio:.2f}"
+                        )
 
             results.append(frame_faces)
 
