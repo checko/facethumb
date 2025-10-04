@@ -154,6 +154,109 @@ def find_largest_face(faces: List[Dict], frame_shape: Tuple[int, int]) -> Option
     return largest_face
 
 
+def check_image_quality(frame: np.ndarray, face_bbox: Optional[Tuple[float, float, float, float]] = None) -> Dict[str, float]:
+    """
+    Check image quality using blur detection.
+
+    Uses Laplacian variance to detect blur. Higher values indicate sharper images.
+
+    Args:
+        frame: Input frame
+        face_bbox: Optional face bounding box to check quality of face region only
+
+    Returns:
+        Dictionary with:
+        - 'blur_score': Laplacian variance (higher = sharper, typically >100 is good)
+        - 'is_blurry': Boolean indicating if image is too blurry
+    """
+    # Convert to grayscale
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    # If face bbox provided, crop to face region
+    if face_bbox:
+        x, y, w, h = face_bbox
+        frame_height, frame_width = frame.shape[:2]
+
+        # Convert normalized coordinates to pixels
+        x1 = int(x * frame_width)
+        y1 = int(y * frame_height)
+        x2 = int((x + w) * frame_width)
+        y2 = int((y + h) * frame_height)
+
+        # Ensure coordinates are within bounds
+        x1 = max(0, x1)
+        y1 = max(0, y1)
+        x2 = min(frame_width, x2)
+        y2 = min(frame_height, y2)
+
+        # Crop to face region
+        gray = gray[y1:y2, x1:x2]
+
+    # Calculate Laplacian variance (blur metric)
+    laplacian = cv2.Laplacian(gray, cv2.CV_64F)
+    blur_score = float(laplacian.var())
+
+    # Threshold for blur detection (can be adjusted)
+    blur_threshold = 100.0
+    is_blurry = blur_score < blur_threshold
+
+    return {
+        'blur_score': blur_score,
+        'is_blurry': is_blurry
+    }
+
+
+def score_face(
+    face: Dict,
+    frame_shape: Tuple[int, int],
+    quality_metrics: Optional[Dict[str, float]] = None,
+    prefer_larger: bool = True
+) -> float:
+    """
+    Calculate composite score for a face detection.
+
+    Combines face size, quality, and other factors into a single score.
+    Higher scores indicate better faces for extraction.
+
+    Args:
+        face: Face detection dictionary with 'bbox', 'confidence', 'metrics'
+        frame_shape: Frame dimensions (height, width)
+        quality_metrics: Optional quality metrics from check_image_quality()
+        prefer_larger: Whether to prefer larger faces
+
+    Returns:
+        Composite score (0.0-1.0+, higher is better)
+    """
+    # Base score from face area ratio
+    if 'metrics' not in face:
+        face['metrics'] = calculate_face_metrics(face['bbox'], frame_shape)
+
+    face_area_ratio = face['metrics']['face_area_ratio']
+
+    # Size score (0.0-1.0, normalized by expected max of 0.5 = 50% of frame)
+    size_score = min(face_area_ratio / 0.5, 1.0) if prefer_larger else face_area_ratio
+
+    # Confidence score (already 0.0-1.0)
+    confidence_score = face.get('confidence', 0.5)
+
+    # Quality score
+    quality_score = 1.0
+    if quality_metrics:
+        # Normalize blur score (typically 0-500, with >100 being good)
+        blur_score = quality_metrics.get('blur_score', 100)
+        quality_score = min(blur_score / 200.0, 1.0)  # Normalize to 0-1
+
+    # Weighted composite score
+    # Size is most important (50%), then quality (30%), then confidence (20%)
+    composite_score = (
+        size_score * 0.5 +
+        quality_score * 0.3 +
+        confidence_score * 0.2
+    )
+
+    return composite_score
+
+
 def draw_face_box(frame: np.ndarray, face_bbox: Tuple[float, float, float, float],
                   color: Tuple[int, int, int] = (0, 255, 0), thickness: int = 2) -> np.ndarray:
     """
