@@ -8,8 +8,12 @@ Extracts representative JPEG frames from videos containing large faces.
 import argparse
 import sys
 import logging
+import warnings
 from pathlib import Path
 from typing import Optional
+
+# Suppress protobuf deprecation warnings from MediaPipe
+warnings.filterwarnings('ignore', category=UserWarning, module='google.protobuf.symbol_database')
 
 from video_extractor.utils import (
     setup_logging,
@@ -77,10 +81,6 @@ def process_single_video(
         duration = metadata['duration']
         logger.debug(f"Video duration: {duration:.2f}s, Resolution: {metadata['width']}x{metadata['height']}")
 
-        if duration < 5:
-            logger.warning(f"Video too short ({duration:.2f}s), skipping")
-            return False, {'error': 'Video too short'}
-
         import cv2
 
         best_frame = None
@@ -88,14 +88,39 @@ def process_single_video(
         best_score = 0.0
         best_timestamp = 0.0
 
+        # Fallback frame for videos with no qualifying faces
+        fallback_frame = None
+        fallback_timestamp = 0.0
+
+        # Track all detected faces (even below threshold)
+        all_faces_detected = []  # List of (frame, face, timestamp) tuples
+
+        # Handle very short videos - extract first frame as fallback
+        if duration < 5:
+            logger.warning(f"Video too short ({duration:.2f}s), will use first frame")
+            try:
+                fallback_frame = extract_iframe(video_path, min(1.0, duration * 0.1))
+                fallback_timestamp = min(1.0, duration * 0.1)
+            except Exception as e:
+                logger.debug(f"Failed to extract fallback frame: {e}")
+
         # Stage 1: Check embedded thumbnail
         if use_adaptive:
             logger.debug("Stage 1: Checking embedded thumbnail")
             thumbnail = extract_thumbnail(video_path)
             if thumbnail is not None:
+                # Use thumbnail as fallback if no fallback yet
+                if fallback_frame is None:
+                    fallback_frame = thumbnail
+                    fallback_timestamp = 0
+
                 face_detections = face_analyzer.detect_faces_batch([thumbnail])[0]
                 if face_detections:
                     largest_face = find_largest_face(face_detections, thumbnail.shape)
+
+                    # Track this face even if below threshold
+                    all_faces_detected.append((thumbnail, largest_face, 0))
+
                     if largest_face['metrics']['face_area_ratio'] >= min_face_threshold:
                         quality = check_image_quality(thumbnail, largest_face['bbox'])
                         score = score_face(
@@ -139,10 +164,20 @@ def process_single_video(
             for ts in timestamps:
                 try:
                     frame = extract_iframe(video_path, ts)
+
+                    # Use first successfully extracted frame as fallback if no fallback yet
+                    if fallback_frame is None:
+                        fallback_frame = frame
+                        fallback_timestamp = ts
+
                     face_detections = face_analyzer.detect_faces_batch([frame])[0]
 
                     if face_detections:
                         largest_face = find_largest_face(face_detections, frame.shape)
+
+                        # Track this face even if below threshold
+                        all_faces_detected.append((frame, largest_face, ts))
+
                         if largest_face['metrics']['face_area_ratio'] >= min_face_threshold:
                             quality = check_image_quality(frame, largest_face['bbox'])
                             score = score_face(
@@ -164,16 +199,34 @@ def process_single_video(
                 except Exception as e:
                     logger.debug(f"Failed to extract frame at {ts:.1f}s: {e}")
 
-        # Check if we found a qualifying face
+        # Fallback strategy: if no qualifying face found
         if best_frame is None or best_face is None:
-            logger.info(f"No qualifying faces found in {video_path.name}")
-            return False, {'error': 'No qualifying faces found'}
+            # Strategy 1: Use biggest face detected (even if below threshold)
+            if all_faces_detected:
+                logger.info(f"No faces above threshold, using biggest face found in {video_path.name}")
+                # Find the biggest face from all detected faces
+                biggest = max(all_faces_detected, key=lambda x: x[1]['metrics']['face_area_ratio'])
+                best_frame, best_face, best_timestamp = biggest
+                best_score = 0.0  # Indicate this is a fallback
+            # Strategy 2: Use first extracted frame (no faces detected at all)
+            elif fallback_frame is not None:
+                logger.info(f"No faces detected, using first frame from {video_path.name}")
+                best_frame = fallback_frame
+                best_face = None
+                best_timestamp = fallback_timestamp
+                best_score = 0.0
+            else:
+                # This should rarely happen - only if we can't extract any frame
+                logger.error(f"Failed to extract any frame from {video_path.name}")
+                return False, {'error': 'Failed to extract any frame'}
 
         # Save best frame
         output_path = get_output_filename(video_path, output_dir)
         cv2.imwrite(str(output_path), best_frame)
 
-        face_area_ratio = best_face['metrics']['face_area_ratio']
+        # Get face area ratio if available
+        face_area_ratio = best_face['metrics']['face_area_ratio'] if best_face else 0.0
+
         logger.info(
             f"✓ Extracted frame from {video_path.name} "
             f"(face: {face_area_ratio:.2%}, score: {best_score:.3f}, time: {best_timestamp:.1f}s) -> {output_path.name}"

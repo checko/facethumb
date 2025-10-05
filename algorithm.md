@@ -62,7 +62,10 @@ This algorithm efficiently locates a frame containing a large, identifiable face
      - Select frame with highest composite score
      - Save as JPEG: `video_name.jpg`
      - Log: face area, score, timestamp
-   - If no qualifying faces found: Report failure, skip video
+   - **Fallback Strategy** (ensures 100% output):
+     - If no qualifying faces found: Use biggest face detected (even if below threshold)
+     - If no faces detected at all: Use first extracted frame
+     - Video too short (<5s): Use first frame
 
 ## Parameters and Tuning (Implemented Values)
 - **Face Threshold**: `0.02` (2% of frame area) - Optimized for 100% success rate
@@ -73,15 +76,17 @@ This algorithm efficiently locates a frame containing a large, identifiable face
 - **Actual Performance**: ~10 seconds per video, 100% success rate on test set (5/5)
 
 ## Edge Cases (Handled)
-- **Short videos (<5s)**: Reject, too short to process
+- **Short videos (<5s)**: Use first frame as fallback
 - **No embedded thumbnail**: Common, continue to dense sampling
 - **Scene detection**: DISABLED (was unreliable, slow)
-- **No qualifying match**: Report "No qualifying faces found", skip video
+- **No qualifying match**: Use biggest face detected or first frame (guarantees output)
+- **No faces detected**: Use first extracted frame as fallback
 - **Multiple faces**: Select highest composite score (size × quality × confidence × gender)
 - **Resume interrupted jobs**: SQLite database tracks processed videos, `--resume` flag skips completed
 
 ## Results
-- **Success Rate**: 100% (5/5 test videos with faces at sampled timestamps)
+- **Output Rate**: 100% (every video gets a JPG output with fallback strategy)
 - **Face Quality**: Larger, clearer faces found vs sparse sampling
 - **Speed**: 3x faster than with scene detection (no 30s timeouts)
+- **Fallback Usage**: Automatic fallback ensures output even for videos without qualifying faces
 - **Phases Complete**: 1-4 (MVP, Adaptive, Gender, Database)

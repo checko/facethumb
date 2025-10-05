@@ -4,13 +4,14 @@ Extract representative JPEG frames from videos containing large, identifiable fa
 
 ## Features
 
-- **🎯 100% Success Rate**: Dense adaptive sampling (16 timestamps) ensures face extraction from all videos
-- **⚡ Smart Face Detection**: MediaPipe with GPU acceleration for fast, accurate detection
-- **🧠 Adaptive Sampling**: Intelligently samples 16 timestamps (every 5%) across video duration
-- **👤 Gender Preference**: Optional gender classification with configurable weighting
-- **💾 Resume Support**: SQLite-based progress tracking for interrupted batch jobs
-- **📊 Quality Scoring**: Composite scoring (size 45%, quality 27%, confidence 18%, gender 10%)
-- **🚀 Batch Processing**: Process entire directories with automatic database tracking
+- **100% Output Guarantee**: Always extracts a frame from every video with intelligent fallback strategies
+- **Smart Face Detection**: MediaPipe with GPU acceleration for fast, accurate detection
+- **Adaptive Sampling**: Intelligently samples 16 timestamps (every 5%) across video duration
+- **Fallback Strategy**: No face found → use biggest face or first frame (ensures output for all videos)
+- **Gender Preference**: Optional gender classification with configurable weighting
+- **Resume Support**: SQLite-based progress tracking for interrupted batch jobs
+- **Quality Scoring**: Composite scoring (size 45%, quality 27%, confidence 18%, gender 10%)
+- **Batch Processing**: Process entire directories with automatic database tracking
 
 ## Installation
 
@@ -91,38 +92,38 @@ python -m video_extractor.main -i videos/ -g none
 
 ## Current Status
 
-**Phase 1 (MVP)**: ✅ Complete
+**Phase 1 (MVP)**: Complete
 - Basic frame extraction with MediaPipe
 - Single video and batch processing
 - Bug fixes: subprocess conflict, false positive filtering
 
-**Phase 2 (Adaptive Algorithm)**: ✅ Complete
+**Phase 2 (Adaptive Algorithm)**: Complete
 - Dense adaptive sampling (16 timestamps every 5%)
 - Thumbnail extraction (fast check)
 - Quality scoring with blur detection
 - 100% success rate achieved on test set
 
-**Phase 3 (Gender Classification)**: ✅ Complete
+**Phase 3 (Gender Classification)**: Complete
 - Gender detection framework (placeholder implementation)
 - Gender-aware composite scoring
 - CLI flags for gender preference and weight
 - Configurable scoring weights
 
-**Phase 4 (Database & Resumability)**: ✅ Complete
+**Phase 4 (Database & Resumability)**: Complete
 - SQLite-based progress tracking
 - Resume interrupted processing sessions
 - Skip already processed videos
 - Detailed metadata storage (status, face_area, score, timestamp)
 
-**Phase 5 (Parallel Processing)**: ⏸️ Pending
+**Phase 5 (Parallel Processing)**: Pending
 - Multi-process worker pools
 - Producer-consumer pattern
 
-**Phase 6 (Error Handling)**: ⏸️ Pending
+**Phase 6 (Error Handling)**: Pending
 - Retry logic with exponential backoff
 - GPU fallback to CPU
 
-**Phase 7 (Optimization)**: ⏸️ Pending
+**Phase 7 (Optimization)**: Pending
 - YAML configuration file
 - ONNX Runtime integration
 
@@ -142,14 +143,14 @@ video_extractor/
 
 ## Performance
 
-- **Success Rate**: 100% (5/5 test videos)
+- **Output Rate**: 100% (every video gets a JPG output)
 - **Speed**: ~10 seconds per video (with dense sampling)
 - **Sampling**: 16 timestamps across video duration
-- **Quality**: Larger, clearer faces found vs sparse sampling
+- **Fallback**: Automatic fallback to biggest face or first frame when no qualifying faces found
 
 ## Configuration
 
-Default values optimized for 100% success rate:
+Default values optimized for best quality with guaranteed output:
 
 ```python
 DEFAULT_LARGE_FACE_THRESHOLD = 0.02  # 2% of frame area
@@ -158,6 +159,11 @@ DEFAULT_MAX_SAMPLES = 16
 DEFAULT_GENDER_PREFERENCE = 'female'
 DEFAULT_GENDER_WEIGHT = 0.1
 ```
+
+**Fallback Strategy:**
+1. No qualifying faces (>2% threshold) → Use biggest face detected
+2. No faces detected at all → Use first extracted frame
+3. Video too short (<5s) → Use first frame
 
 ## Requirements
 
