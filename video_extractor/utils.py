@@ -62,7 +62,7 @@ def setup_logging(log_level: str = "INFO", log_file: Optional[str] = None) -> lo
     return logger
 
 
-def validate_paths(input_path: str, output_path: Optional[str] = None) -> Tuple[Path, Path]:
+def validate_paths(input_path: str, output_path: Optional[str] = None) -> Tuple[Path, Optional[Path]]:
     """
     Validate input and output paths.
 
@@ -72,6 +72,8 @@ def validate_paths(input_path: str, output_path: Optional[str] = None) -> Tuple[
 
     Returns:
         Tuple of (validated_input_path, validated_output_path)
+        - For directory processing without output_path: returns None as output_path
+        - For single file or with output_path: returns the output directory
 
     Raises:
         ValueError: If paths are invalid
@@ -94,11 +96,12 @@ def validate_paths(input_path: str, output_path: Optional[str] = None) -> Tuple[
         output_p = Path(output_path)
         output_p.mkdir(parents=True, exist_ok=True)
     else:
-        # Use input directory as output
+        # For single file, use parent directory
+        # For directory, return None (will use each video's parent directory)
         if input_p.is_file():
             output_p = input_p.parent
         else:
-            output_p = input_p
+            output_p = None
 
     return input_p, output_p
 
@@ -116,15 +119,17 @@ def is_video_file(file_path: Path) -> bool:
     return file_path.suffix.lower() in SUPPORTED_VIDEO_FORMATS
 
 
-def get_output_filename(video_path: Path, output_dir: Path) -> Path:
+def get_output_filename(video_path: Path, output_dir: Optional[Path]) -> Path:
     """
     Generate output JPEG filename from video path.
 
     Args:
         video_path: Path to input video
-        output_dir: Output directory
+        output_dir: Output directory (None = use video's parent directory)
 
     Returns:
         Path to output JPEG file
     """
+    if output_dir is None:
+        output_dir = video_path.parent
     return output_dir / f"{video_path.stem}.jpg"

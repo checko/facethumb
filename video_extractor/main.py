@@ -42,7 +42,7 @@ logger = logging.getLogger("video_extractor")
 
 def process_single_video(
     video_path: Path,
-    output_dir: Path,
+    output_dir: Optional[Path],
     face_analyzer: FaceAnalyzer,
     start_time: float = DEFAULT_START_TIME,
     min_face_threshold: float = DEFAULT_LARGE_FACE_THRESHOLD,
@@ -60,7 +60,7 @@ def process_single_video(
 
     Args:
         video_path: Path to video file
-        output_dir: Output directory for JPEG
+        output_dir: Output directory for JPEG (None = use video's parent directory)
         face_analyzer: Face analyzer instance
         start_time: Initial timestamp to check (seconds)
         min_face_threshold: Minimum face area ratio
@@ -261,7 +261,10 @@ def main():
         # Validate paths
         input_path, output_path = validate_paths(args.input, args.output)
         logger.info(f"Input: {input_path}")
-        logger.info(f"Output: {output_path}")
+        if output_path:
+            logger.info(f"Output: {output_path}")
+        else:
+            logger.info(f"Output: Same folder as each video file")
 
         # Initialize database if resume enabled or processing directory
         db = None

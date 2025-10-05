@@ -52,7 +52,7 @@ python -m video_extractor.main --input /path/to/videos --output ./output --resum
 
 **Input/Output:**
 - `--input, -i`: Input video file or directory (required)
-- `--output, -o`: Output directory (default: same as input)
+- `--output, -o`: Output directory (default: same folder as each video file)
 
 **Face Detection:**
 - `--threshold, -t`: Minimum face area ratio (default: 0.02 = 2%)
